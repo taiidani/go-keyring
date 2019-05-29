@@ -34,6 +34,7 @@ type macOSXKeychain struct{}
 // Set stores stores user and pass in the keyring under the defined service
 // name.
 func (k macOSXKeychain) Get(service, username string) (string, error) {
+	// Extract the value itself
 	out, err := exec.Command(
 		execPathKeychain,
 		"find-generic-password",
@@ -45,23 +46,45 @@ func (k macOSXKeychain) Get(service, username string) (string, error) {
 		}
 		return "", err
 	}
-	// if the added secret has multiple lines, osx will hex encode it
-	trimStr := strings.TrimSpace(string(out[:]))
-	dec, err := hex.DecodeString(trimStr)
-	// if there was an error hex decoding the string, assume it's not encoded
+
+	// Extract the metadata
+	meta, err := exec.Command(
+		execPathKeychain,
+		"find-generic-password",
+		"-s", service,
+		"-a", username).CombinedOutput()
 	if err != nil {
-		return fmt.Sprintf("%s", trimStr), nil
+		if strings.Contains(fmt.Sprintf("%s", meta), "could not be found") {
+			err = ErrNotFound
+		}
+		return "", err
 	}
-	return fmt.Sprintf("%s", dec), err
+
+	// If the secret was encoded, decode it
+	if strings.Contains(string(meta), "encoded=true") {
+		trimStr := strings.TrimSpace(string(out[:]))
+		dec, err := hex.DecodeString(trimStr)
+		// if there was an error hex decoding the string, assume it's not encoded
+		if err != nil {
+			return fmt.Sprintf("%s", trimStr), nil
+		}
+		out = dec
+	}
+
+	return strings.TrimSpace(string(out)), err
 }
 
 // Set stores a secret in the keyring given a service name and a user.
 func (k macOSXKeychain) Set(service, username, password string) error {
+	// If the secret has multiple lines, osx will hex encode it
+	multiline := strings.Contains(password, "\n")
+
 	return exec.Command(
 		execPathKeychain,
 		"add-generic-password",
 		"-U", //update if exists
 		"-s", service,
+		"-j", fmt.Sprintf("encoded=%t", multiline),
 		"-a", username,
 		"-w", password).Run()
 }

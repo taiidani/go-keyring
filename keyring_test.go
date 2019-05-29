@@ -17,7 +17,7 @@ func TestSet(t *testing.T) {
 }
 
 // TestGetMultiline tests getting a multi-line password from the keyring
-func TestGetMultiLine(t *testing.T) {
+func TestGetMultiLineString(t *testing.T) {
 	multilinePassword := `this password
 has multiple
 lines and will be
@@ -35,6 +35,24 @@ like osx`
 
 	if multilinePassword != pw {
 		t.Errorf("Expected password %s, got %s", multilinePassword, pw)
+	}
+}
+
+// TestGetSingleLineHex tests getting a single line hex string password from the keyring
+func TestGetSingleLineHex(t *testing.T) {
+	hexPassword := "abcdef123abcdef123"
+	err := Set(service, user, hexPassword)
+	if err != nil {
+		t.Errorf("Should not fail, got: %s", err)
+	}
+
+	pw, err := Get(service, user)
+	if err != nil {
+		t.Errorf("Should not fail, got: %s", err)
+	}
+
+	if hexPassword != pw {
+		t.Errorf("Expected password %s, got %s", hexPassword, pw)
 	}
 }
 
